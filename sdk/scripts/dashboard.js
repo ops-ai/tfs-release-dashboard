@@ -3,47 +3,89 @@ VSS.init({
             usePlatformStyles: true
         });
 
-        VSS.require(["TFS/Dashboards/WidgetHelpers", "TFS/WorkItemTracking/RestClient"], 
-            function (WidgetHelpers, TFS_Wit_WebApi) {
+        VSS.require(["TFS/Dashboards/WidgetHelpers", "TFS/WorkItemTracking/RestClient", "TFS/WorkItemTracking/Contracts", "VSS/Controls", "VSS/Controls/Combos", "VSS/Controls/Grids"], 
+            function (WidgetHelpers, TFS_Wit_WebApi, Contracts, Controls, Combos, Grids) {
                 WidgetHelpers.IncludeWidgetStyles();
-                VSS.register("ReleaseDashboardWidget", function () {                
+                VSS.register("ReleaseDashboardWidget", function () {
                     var projectId = VSS.getWebContext().project.id;
 
                     var getQueryInfo = function (widgetSettings) {
+						
+						var settings = JSON.parse(widgetSettings.customSettings.data);
+						if (!settings || !settings.queryPath) {
+						    var $container = $('#query-info-container');
+						    $container.empty();
+						    $container.text("Nothing to show yet, please configure the widget.");
+
+						    return WidgetHelpers.WidgetStatusHelper.Success();
+						}
+						
                         // Get a WIT client to make REST calls to VSTS
-                        return TFS_Wit_WebApi.getClient().getQuery(projectId, "Shared Queries/Next Release")
+                        return TFS_Wit_WebApi.getClient().getQuery(projectId, settings.queryPath)
                             .then(function (query) {
 								
-	                            var $title = $('h2.title');
-	                            $title.text(query.name);
+						        var $title = $('h2.title');
+						        $title.text(widgetSettings.name);
 									
-                                // Create a list with query details                                
-                                var $list = $('<ul>');
-                                $list.append($('<li>').text("Query ID: " + query.id));
-                                $list.append($('<li>').text("Query Name: " + query.name));
-                                $list.append($('<li>').text("Created By: " + (query.createdBy ? query.createdBy.displayName: "<unknown>") ));
+								return TFS_Wit_WebApi.getClient().queryById(query.id, projectId)
+                            			.then(function (queryResult) {
+								
+										console.log('results: ', queryResult);
+										
+											
+											
+										return TFS_Wit_WebApi.getClient().getWorkItems(queryResult.workItems.map(function(queryResultItem) { return queryResultItem.id; }), queryResult.columns.map(function(queryResultItem) { return queryResultItem.referenceName; }))
+											.then(function (workItems) {
+												
+												console.log('wits', workItems);
+												
+				                                var $container = $('#query-info-container');
+												
+												var gridOptions = {
+												    height: "100%",
+												    width: "100%",
+												    source: function () {
+												      var result = [], i;
+												      for (i = 0; i < 100; i++) {
+												        result[result.length] = [i, "Column 2 text" + i, "Column 3 "];
+												      }
 
-                                // Append the list to the query-info-container
-                                var $container = $('#query-info-container');
-                                $container.empty();
-                                $container.append($list);
+												      return result;
+												      } (),
+												      columns: [
+												        { text: "Column 1", index: 0, width: 50 },
+												        { text: "Column 2", index: 1, width: 200, canSortBy: false },
+												        { text: "Column 3", index: 2, width: 450 }]
+												  };
 
-                                // Use the widget helper and return success as Widget Status
-                                return WidgetHelpers.WidgetStatusHelper.Success();
-                            }, function (error) {
-                                // Use the widget helper and return failure as Widget Status
-                                return WidgetHelpers.WidgetStatusHelper.Failure(error.message);
-                            });
+												  Controls.create(Grids.Grid, $container, gridOptions);
+
+				                                // Use the widget helper and return success as Widget Status
+				                                return WidgetHelpers.WidgetStatusHelper.Success();
+			                            }, function (error) {
+			                                // Use the widget helper and return failure as Widget Status
+			                                return WidgetHelpers.WidgetStatusHelper.Failure(error.message);
+			                            });
+								}, function (error) {
+	                                // Use the widget helper and return failure as Widget Status
+	                                return WidgetHelpers.WidgetStatusHelper.Failure(error.message);
+	                            });
+						},
+						function (error) {
+                            // Use the widget helper and return failure as Widget Status
+                            return WidgetHelpers.WidgetStatusHelper.Failure(error.message);
+                        });
                     }
 
                     return {
                         load: function (widgetSettings) {
                             // Set your title
-                            var $title = $('h2.title');
-                            $title.text('Hello World');
 
                             return getQueryInfo(widgetSettings);
-                        }
+                        },
+						reload: function (widgetSettings) {
+					        return getQueryInfo(widgetSettings);
+					    }
                     }
                 });
             VSS.notifyLoadSucceeded();

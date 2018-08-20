@@ -1,0 +1,105 @@
+ <!DOCTYPE html>
+    <html xmlns="http://www.w3.org/1999/xhtml">
+        <head>                          
+            <script src="sdk/scripts/VSS.SDK.min.js"></script>      
+            <script type="text/javascript">
+                VSS.init({                        
+                    explicitNotifyLoaded: true,
+					usePlatformScripts: true,
+                    usePlatformStyles: true
+                });
+				debug = true;
+				
+				var logDebug = function (message) {
+					if (debug === true) {
+						console.log("[DEBUG] " + "(" + new Date().toLocaleTimeString() + ") ", message);
+					}
+				}
+				var querySelector;
+
+				function GetTree(queries) {
+					var children = [];
+					if (queries)
+						queries.forEach(function(query) {
+							children.push({
+						      	text: query.name,
+								path: query.path,
+						      	children: query.hasChildren ? GetTree(query.children) : null
+						    	});
+						});
+					return children;
+				}
+
+                VSS.require(["TFS/Dashboards/WidgetHelpers", "TFS/WorkItemTracking/RestClient", "TFS/WorkItemTracking/Contracts", "VSS/Controls", "VSS/Controls/Combos", "VSS/Controls/TreeView"],
+					function (WidgetHelpers, TFS_Wit_WebApi, Contracts, Controls, Combos, TreeView) {
+								
+						WidgetHelpers.IncludeWidgetConfigurationStyles();
+                  		var projectId = VSS.getWebContext().project.id;
+					
+					
+	                    VSS.register("ReleaseDashboardWidget.Configuration", function () {
+						
+						
+	                        var $queryDropdown = $("#query-path-dropdown");
+
+	                        return {
+	                            load: function (widgetSettings, widgetConfigurationContext) {
+	                                var settings = JSON.parse(widgetSettings.customSettings.data);
+									
+											
+									
+			                        TFS_Wit_WebApi.getClient().getQueries(projectId, Contracts.QueryExpand.None, 2)
+			                            .then(function (queries) {
+											//queries.
+											logDebug(queries);
+											
+											
+											var treeOptions = {
+												  type: TreeView.SearchComboTreeBehaviorName,
+												  
+												  sepChar: "\\",
+												  source: GetTree(queries),
+												  change: function (ch) {
+												  		logDebug("changed");
+												  		logDebug(ch);
+					                                     var customSettings = {data: JSON.stringify({queryPath: this.getText()})};
+					                                     var eventName = WidgetHelpers.WidgetEvent.ConfigurationChange;
+					                                     var eventArgs = WidgetHelpers.WidgetEvent.Args(customSettings);
+					                                     widgetConfigurationContext.notify(eventName, eventArgs);
+													  }
+												};
+												
+												querySelector = Controls.create(Combos.Combo, $queryDropdown, treeOptions);
+												
+				                                if (settings && settings.queryPath) {
+      												querySelector.setText(settings.queryPath);
+				                                 }
+											
+											});
+									
+
+	                                return WidgetHelpers.WidgetStatusHelper.Success();
+	                            },
+	                            onSave: function() {
+	                                var customSettings = {data: JSON.stringify({queryPath: querySelector.getText()})};
+	                                return WidgetHelpers.WidgetConfigurationSave.Valid(customSettings); 
+	                            }
+	                        }
+	                    });
+                    VSS.notifyLoadSucceeded();
+               	  });
+            </script>       
+        </head>
+        <body>
+            <div class="widget-configuration">
+                <fieldset>
+                    <label class="label">Query: </label>
+                    <div id="query-path-dropdown" style="margin-top:10px;margin-bottom:10px" />
+                </fieldset>
+                <fieldset>
+                    <label class="label">next: </label>
+                    <div id="config2" style="margin-top:10px;" />
+                </fieldset>     
+            </div>
+        </body>
+    </html>
